@@ -24,7 +24,7 @@ Manage AI agent skills across Claude Code, Cursor, Windsurf, GitHub Copilot, and
 
 ```bash
 # Clone and install
-git clone https://github.com/youruser/skiller.git
+git clone https://github.com/jirka8/skiller.git
 cd skiller
 npm install
 
@@ -57,7 +57,7 @@ The main menu provides 9 actions:
 │  4. Check for Updates               │
 │  5. Update Skills                   │
 │  6. Move Skills                     │
-│  7. Deactivate / Reactivate        │
+│  7. Deactivate / Reactivate         │
 │  8. Dashboard                       │
 │  9. Settings & Info                 │
 │  0. Exit                            │
