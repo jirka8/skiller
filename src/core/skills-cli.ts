@@ -167,7 +167,7 @@ export async function skillsUpdate(
 ): Promise<{ success: boolean; output: string }> {
   await ensureNpx();
 
-  const args = ["--yes", "skills", "update"];
+  const args = ["--yes", "skills", "update", "--yes"];
   if (skillName) args.push(skillName);
 
   const result = await runCommand("npx", args, {
