@@ -1,5 +1,4 @@
 import * as p from "@clack/prompts";
-import pc from "picocolors";
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { readLockFile } from "../core/lock-file.js";
@@ -8,6 +7,7 @@ import { getActiveAgentDirs, getAgentDisplayName, getDetectedAgents } from "../c
 import { getProjectRoot, pathExists } from "../utils/paths.js";
 import { DISABLED_MANIFEST_PATH, AGENTS_SKILLS_DIR } from "../constants.js";
 import { formatCount } from "../utils/format.js";
+import { colors, nextSteps } from "../utils/ui.js";
 import type { DisabledManifest, DisabledSkillEntry, InstalledSkill } from "../types.js";
 
 // --- Manifest I/O ---
@@ -176,7 +176,7 @@ async function handleDeactivate(): Promise<void> {
     message: "Select skills to deactivate:",
     options: activeSkills.map((sk) => ({
       value: sk.name,
-      label: `${sk.name}  ${pc.dim(sk.agents.map(getAgentDisplayName).join(", "))}`,
+      label: `${sk.name}  ${colors.agents(sk.agents.map(getAgentDisplayName).join(", "))}`,
     })),
     required: true,
   });
@@ -190,6 +190,9 @@ async function handleDeactivate(): Promise<void> {
 
   if (p.isCancel(confirm) || !confirm) return;
 
+  const deactivated: string[] = [];
+  const failed: string[] = [];
+
   for (const name of names) {
     const skill = activeSkills.find((sk) => sk.name === name);
     if (!skill) continue;
@@ -199,11 +202,23 @@ async function handleDeactivate(): Promise<void> {
 
     try {
       await disableSkill(skill);
-      ds.stop(pc.green(`Deactivated ${name}`));
+      ds.stop(colors.success(`Deactivated ${name}`));
+      deactivated.push(name);
     } catch (err) {
-      ds.stop(pc.red(`Failed to deactivate ${name}`));
+      ds.stop(colors.error(`Failed to deactivate ${name}`));
       p.log.error((err as Error).message);
+      failed.push(name);
     }
+  }
+
+  if (deactivated.length > 0) {
+    nextSteps("Deactivation complete", [
+      `Deactivated ${formatCount(deactivated.length, "skill")}: ${deactivated.map((n) => colors.skillName(n)).join(", ")}`,
+      ...(failed.length > 0
+        ? [`Failed: ${failed.map((n) => colors.error(n)).join(", ")}`]
+        : []),
+      "Use 'Reactivate' to re-enable these skills later",
+    ]);
   }
 }
 
@@ -220,7 +235,7 @@ async function handleReactivate(): Promise<void> {
     message: "Select skills to reactivate:",
     options: disabledNames.map((name) => ({
       value: name,
-      label: `${name}  ${pc.dim(`disabled ${manifest.skills[name].disabledAt.split("T")[0]}`)}`,
+      label: `${name}  ${colors.date(`disabled ${manifest.skills[name].disabledAt.split("T")[0]}`)}`,
     })),
     required: true,
   });
@@ -228,6 +243,8 @@ async function handleReactivate(): Promise<void> {
   if (p.isCancel(selected)) return;
 
   const names = selected as string[];
+  const reactivated: string[] = [];
+  const failed: string[] = [];
 
   for (const name of names) {
     const rs = p.spinner();
@@ -235,10 +252,22 @@ async function handleReactivate(): Promise<void> {
 
     try {
       await reactivateSkill(name);
-      rs.stop(pc.green(`Reactivated ${name}`));
+      rs.stop(colors.success(`Reactivated ${name}`));
+      reactivated.push(name);
     } catch (err) {
-      rs.stop(pc.red(`Failed to reactivate ${name}`));
+      rs.stop(colors.error(`Failed to reactivate ${name}`));
       p.log.error((err as Error).message);
+      failed.push(name);
     }
+  }
+
+  if (reactivated.length > 0) {
+    nextSteps("Reactivation complete", [
+      `Reactivated ${formatCount(reactivated.length, "skill")}: ${reactivated.map((n) => colors.skillName(n)).join(", ")}`,
+      ...(failed.length > 0
+        ? [`Failed: ${failed.map((n) => colors.error(n)).join(", ")}`]
+        : []),
+      "These skills are now active for their assigned agents",
+    ]);
   }
 }

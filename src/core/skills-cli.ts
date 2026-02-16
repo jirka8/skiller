@@ -28,14 +28,34 @@ export async function searchSkills(
     // Normalize response - API may return array or { results: [] }
     const results = Array.isArray(data) ? data : data.results ?? data.skills ?? [];
 
-    return results.map((item: Record<string, unknown>) => ({
-      name: (item.name as string) || (item.slug as string) || "unknown",
-      source: (item.source as string) || (item.repo as string) || (item.github as string) || "",
-      description: (item.description as string) || "",
-      author: (item.author as string) || "",
-      tags: (item.tags as string[]) || [],
-      url: (item.url as string) || "",
-    }));
+    return results.map((item: Record<string, unknown>) => {
+      const name = (item.name as string) || (item.slug as string) || (item.skillId as string) || "unknown";
+      const source = (item.source as string) || (item.repo as string) || (item.github as string) || "";
+      // Build installSource: "owner/repo@skill" format for npx skills add
+      // API returns id as "owner/repo/skill" — convert to "owner/repo@skill"
+      const id = item.id as string | undefined;
+      let installSource = "";
+      if (id) {
+        // id format: "owner/repo/skill" → "owner/repo@skill"
+        const lastSlash = id.lastIndexOf("/");
+        if (lastSlash > 0) {
+          installSource = id.substring(0, lastSlash) + "@" + id.substring(lastSlash + 1);
+        }
+      }
+      if (!installSource && source && name) {
+        installSource = `${source}@${name}`;
+      }
+
+      return {
+        name,
+        source,
+        installSource: installSource || source || name,
+        description: (item.description as string) || "",
+        author: (item.author as string) || "",
+        tags: (item.tags as string[]) || [],
+        url: (item.url as string) || "",
+      };
+    });
   } catch (err) {
     if ((err as Error).name === "AbortError") {
       throw new Error("Search timed out. Please try again.");
@@ -66,7 +86,7 @@ export async function skillsAdd(
 ): Promise<{ success: boolean; output: string }> {
   await ensureNpx();
 
-  const args = ["skills", "add", source];
+  const args = ["--yes", "skills", "add", source, "--yes"];
 
   if (options?.scope === "global") {
     args.push("--global");
@@ -83,9 +103,10 @@ export async function skillsAdd(
     timeoutMs: 60_000,
   });
 
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
   return {
     success: result.exitCode === 0,
-    output: result.stdout || result.stderr,
+    output,
   };
 }
 
@@ -99,7 +120,7 @@ export async function skillsRemove(
 ): Promise<{ success: boolean; output: string }> {
   await ensureNpx();
 
-  const args = ["skills", "remove", skillName];
+  const args = ["--yes", "skills", "remove", skillName, "--yes"];
 
   if (options?.scope === "global") {
     args.push("--global");
@@ -116,9 +137,10 @@ export async function skillsRemove(
     timeoutMs: 30_000,
   });
 
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
   return {
     success: result.exitCode === 0,
-    output: result.stdout || result.stderr,
+    output,
   };
 }
 
@@ -127,14 +149,15 @@ export async function skillsCheck(
 ): Promise<{ success: boolean; output: string }> {
   await ensureNpx();
 
-  const result = await runCommand("npx", ["skills", "check"], {
+  const result = await runCommand("npx", ["--yes", "skills", "check"], {
     cwd,
     timeoutMs: 30_000,
   });
 
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
   return {
     success: result.exitCode === 0,
-    output: result.stdout || result.stderr,
+    output,
   };
 }
 
@@ -144,7 +167,7 @@ export async function skillsUpdate(
 ): Promise<{ success: boolean; output: string }> {
   await ensureNpx();
 
-  const args = ["skills", "update"];
+  const args = ["--yes", "skills", "update"];
   if (skillName) args.push(skillName);
 
   const result = await runCommand("npx", args, {
@@ -152,8 +175,9 @@ export async function skillsUpdate(
     timeoutMs: 60_000,
   });
 
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
   return {
     success: result.exitCode === 0,
-    output: result.stdout || result.stderr,
+    output,
   };
 }

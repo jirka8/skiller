@@ -61,6 +61,7 @@ export interface DisabledManifest {
 export interface SearchResult {
   name: string;
   source: string; // "owner/repo"
+  installSource: string; // "owner/repo@skill" — full identifier for npx skills add
   description?: string;
   author?: string;
   tags?: string[];
