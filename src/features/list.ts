@@ -23,29 +23,42 @@ export async function listSkills(): Promise<void> {
     return;
   }
 
-  // Sort: global first, then alphabetical within each scope
-  const sorted = [...skills].sort((a, b) => {
-    if (a.scope !== b.scope) return a.scope === "global" ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
+  // Sort alphabetically
+  const sorted = [...skills].sort((a, b) => a.name.localeCompare(b.name));
 
-  // Interactive browse loop
+  // Browse loop: filter → select → detail → repeat
   let browsing = true;
   while (browsing) {
-    const globalCount = sorted.filter((sk) => sk.scope === "global").length;
-    const projectCount = sorted.filter((sk) => sk.scope === "project").length;
+    // Step 1: Filter prompt
+    const query = await p.text({
+      message: `Search installed skills (${skills.length} total) — or press Enter to show all:`,
+      placeholder: "filter by name, source, agent...",
+      defaultValue: "",
+    });
 
-    const scopeHint = [
-      globalCount > 0 ? `${globalCount} global` : "",
-      projectCount > 0 ? `${projectCount} project` : "",
-    ]
-      .filter(Boolean)
-      .join(", ");
+    if (p.isCancel(query)) return;
 
+    // Filter skills by query across name, source, agents, scope
+    const q = (query ?? "").toLowerCase().trim();
+    const filtered = q
+      ? sorted.filter((sk) => {
+          const agents = sk.agents.map(getAgentDisplayName).join(" ");
+          const source = sk.lockEntry?.source ?? "";
+          const haystack = `${sk.name} ${source} ${agents} ${sk.scope}`.toLowerCase();
+          return haystack.includes(q);
+        })
+      : sorted;
+
+    if (filtered.length === 0) {
+      p.log.warn(`No skills matching "${q}". Try a different filter.`);
+      continue;
+    }
+
+    // Step 2: Select from filtered list
     const selected = await p.select({
-      message: `Installed Skills (${skills.length} — ${scopeHint}) — type to filter:`,
+      message: `${filtered.length} skill${filtered.length === 1 ? "" : "s"} found:`,
       options: [
-        ...sorted.map((sk) => {
+        ...filtered.map((sk) => {
           const agents = sk.agents.map(getAgentDisplayName).join(", ");
           const source = sk.lockEntry?.source ?? "";
           return {
@@ -63,9 +76,21 @@ export async function listSkills(): Promise<void> {
       break;
     }
 
+    // Step 3: Show detail
     const skill = sorted.find((sk) => sk.name === selected);
     if (skill) {
       showSkillDetails(skill);
+      // Pause so the user can read the detail before looping
+      const next = await p.select({
+        message: "Continue:",
+        options: [
+          { value: "browse", label: "Browse more skills" },
+          { value: "back", label: "Back to menu" },
+        ],
+      });
+      if (p.isCancel(next) || next === "back") {
+        browsing = false;
+      }
     }
   }
 }
